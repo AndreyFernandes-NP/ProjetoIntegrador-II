@@ -1,14 +1,10 @@
 # Projeto Integrador II (PUC-SP)
 
-Este repositório contém o desenvolvimento do Projeto Integrador II da Pós-Graduação em Inteligência Artificial da **PUC-SP**. O escopo, tema e objetivos do projeto ainda serão definidos.
+Este repositório contém o desenvolvimento do Projeto Integrador II da Pós-Graduação em Inteligência Artificial da **PUC-SP**. O tema e objetivo deste projeto é desenvolver um sistema de análise automática de chamadas e evidências para uma empresa nacional de T.I, explorando todos os conceitos abordados durante o semestre na criação deste projeto.
 
 ## Objetivo
 
-A ser definido.
-
-## Hipótese
-
-A ser definida.
+Desenvolver um sistema multimodal inteligente de Análise Automática de Chamados e Evidências para uma empresa corporativa de T.I, a triagem desses chamados atualmente é feita de forma manual por analistas especializados, é necessário desenvolver uma solução capaz de automatizar e manter a constiência entre cada resolução, possibilitando uma maior eficiência no atendimento ao cliente.
 
 ## Mapa de documentação do repositório
 
@@ -16,7 +12,15 @@ A ser criado.
 
 ## Escopo atual
 
-A ser definido.
+Atualmente o foco do nosso projeto está, em ordem:
+
+- limpeza, padronização e enriquecimento dos dados
+- análise exploratória dos dados e indicadores de eficiência
+- desenvolvimento dos primeiros testes de modelos de deep learning
+- módulo de processamento de linguagem natural (PLN) para descrições textuais
+- integração dos modelos multimodais
+- consolidação final da pipeline e escalabilidade
+- apresentação final e demo
 
 ## Requisitos
 
