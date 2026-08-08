@@ -1,6 +1,6 @@
 # Projeto Integrador II (PUC-SP)
 
-Este repositório contém o desenvolvimento do Projeto Integrador II da Pós-Graduação em Inteligência Artificial da **PUC-SP**. O escopo, tema e objetivos do projeto ainda estão a ser definidos.
+Este repositório contém o desenvolvimento do Projeto Integrador II da Pós-Graduação em Inteligência Artificial da **PUC-SP**. O escopo, tema e objetivos do projeto ainda serão definidos.
 
 ## Objetivo
 
