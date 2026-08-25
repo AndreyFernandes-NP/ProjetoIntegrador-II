@@ -99,6 +99,39 @@ def clean_strings(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+def merge_suffix_pairs(df: pd.DataFrame, suffixes: tuple[str, str] = ("_x", "_y")) -> pd.DataFrame:
+    """
+    Resolve colunas duplicadas por merge (ex.: 'cidade_x'/'cidade_y').
+
+    Combina os dois lados (priorizando o primeiro sufixo quando ambos têm
+    valor) e renomeia o resultado para o nome base, sem sufixo.
+    """
+    df = df.copy()
+    left, right = suffixes
+
+    bases = sorted({
+        column[: -len(left)]
+        for column in df.columns
+        if column.endswith(left) and (column[: -len(left)] + right) in df.columns
+    })
+
+    for base in bases:
+        col_left, col_right = base + left, base + right
+        df[base] = df[col_left].combine_first(df[col_right])
+        df = df.drop(columns=[col_left, col_right])
+
+    return df
+
+def drop_sparse_columns(df: pd.DataFrame, threshold: float = 0.99) -> pd.DataFrame:
+    """Remove colunas cuja fração de valores nulos é >= threshold."""
+    sparse_cols = [column for column in df.columns if df[column].isna().mean() >= threshold]
+    return df.drop(columns=sparse_cols)
+
+def drop_constant_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove colunas sem variação (só nulos ou um único valor não nulo)."""
+    constant_cols = [column for column in df.columns if df[column].nunique(dropna=True) <= 1]
+    return df.drop(columns=constant_cols)
+
 def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df = df.dropna(how="all")
@@ -106,6 +139,9 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
     df.columns = [normalize_column_name(column) for column in df.columns]
     df = clean_strings(df)
+    df = merge_suffix_pairs(df)
+    df = drop_sparse_columns(df)
+    df = drop_constant_columns(df)
 
     for column in df.columns:
         series = df[column]
