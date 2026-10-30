@@ -12,12 +12,14 @@ class ProjectPaths:
     data_clean:     Path   # data/clean/
     data_processed: Path   # data/processed/
     data_images:    Path   # data/images/
-#   reports:        Path   # reports/
+    reports:        Path   # reports/
+    models:         Path   # models/
     src:            Path   # src/
     core:           Path   # src/core/
     config:         Path   # src/config/
     src_data:       Path   # src/data/
     src_pipeline:   Path   # src/data/pipeline/
+    plot:           Path   # src/plot
     notebooks:      Path   # notebooks/
     docs:           Path   # docs/
 
@@ -34,12 +36,14 @@ def get_project_paths(root: Path | None = None) -> ProjectPaths:
         data_clean     = data_dir / "clean",
         data_processed = data_dir / "processed",
         data_images    = data_dir / "images",
-#       reports        = project_root / "reports",
+        reports        = project_root / "reports",
+        models         = project_root / "models",
         src            = src_dir,
         core           = src_dir / "core",
         config         = src_dir / "config",
         src_data       = src_dir / "data",
         src_pipeline   = src_dir / "data" / "pipeline",
+        plot           = src_dir / "plot",
         notebooks      = project_root / "notebooks",
         docs           = project_root / "docs",
     )

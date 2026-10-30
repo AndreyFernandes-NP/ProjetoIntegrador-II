@@ -36,6 +36,14 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
+# Hugging Face models
+/models/
+
+# Processed and Enriched Datasets
+/data/processed/
+/reports/runs/
+/reports/data/
+
 # Unit test / coverage reports
 htmlcov/
 .tox/

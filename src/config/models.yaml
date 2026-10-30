@@ -1,0 +1,357 @@
+# =============================================================================
+# Geração de Colunas e Classificação Multimodal
+# =============================================================================
+# Ordem: visão -> PLN -> tabular, todos com split.seed: 42.
+# fonte.link: URL do REPOSITÓRIO Hugging Face, tem prioridade sobre fonte.nome.
+# Os adaptadores exigem arquiteturas compatíveis (BLIP / classificação NLI).
+# Downloads: models/huggingface, pesos ajustados: models/runs/<execução>/.
+# BLIP produz descrições em inglês enquanto o PLN aceita texto em português/inglês.
+# image_score: média geométrica das probabilidades dos tokens de conteúdo.
+# semantic_margin: diferença de suporte NLI entre os dois melhores tópicos (não calibrada).
+# tabular_profile_cluster: é um código nominal e não ordem de urgência nem target.
+schema_version: 3
+
+global_config:
+  dataset: data/processed/chamados.parquet
+  target_col: target_category
+
+  split:
+    enabled: true
+    id_column: ticket_id
+    strategy: group
+    train_size: 0.7
+    validation_size: 0.15
+    test_size: 0.15
+    seed: 42
+    output: data/processed/splits/chamados.json
+    group_column: image_path
+    group_mode: image_hash
+    group_candidates: 512
+    max_size_deviation: 0.1
+    require_all_classes: true
+    time_column: created_at
+    image_column: image_path
+    image_base_dir: data
+    audit_columns: []
+    overlap_policy: warn
+    
+enrichment:
+  stages:
+  - visao_computacional
+  - pln
+  - deep_learning
+  max_new_columns: 6
+  allow_overwrite:
+  - sentiment_score
+
+modelos:
+  visao_computacional:
+    enabled: true
+    role: feature_generator
+    adapter: blip_captioning
+    features:
+    - image_path
+    depends_on: []
+    device: auto
+    fonte:
+      link: null
+      nome: Salesforce/blip-image-captioning-base
+      revision: main
+      local_files_only: false
+
+    preprocessing:
+      base_dir: data
+
+    training:
+      enabled: true
+      captions_file: data/annotations/image_captions.csv
+      epochs: 2
+      batch_size: 2
+      patience: 1
+      learning_rate: 1.0e-05
+      unfreeze_last_layers: 1
+      max_length: 48
+
+    generation:
+      num_beams: 3
+      max_new_tokens: 24
+
+    outputs:
+    - name: image_description
+      dtype: string
+      action: add
+    - name: image_score
+      dtype: float
+      action: add
+      range:
+      - 0
+      - 1
+      
+  pln:
+    enabled: true
+    role: feature_generator
+    adapter: contextual_nli
+    features:
+    - title
+    - description
+    depends_on: []
+    device: auto
+    fonte:
+      link: null
+      nome: MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli
+      revision: main
+      local_files_only: false
+      
+    batch_size: 16
+    max_length: 256
+    
+    sentiment:
+      candidates:
+      - hypothesis: O solicitante expressa insatisfação, frustração ou uma experiência
+          negativa.
+        value: -1.0
+      - hypothesis: O solicitante apresenta uma informação ou pedido de forma neutra.
+        value: 0.0
+      - hypothesis: O solicitante expressa satisfação, agradecimento ou uma experiência
+          positiva.
+        value: 1.0
+
+    # Convenção: classificar o assunto. Sistemas financeiros/RH pertencem ao domínio.
+    # Login/permissão e rede só quando esse for o problema descrito, não mera ação.
+    # Não há regra de palavra-chave nem correção usando target_category.
+    # Rejeição é um estado de incerteza; não participa como hipótese concorrente.
+    # Limiares iniciais, ainda NÃO calibrados em anotações humanas.
+    topics:
+      scoring: entailment
+      fonte:
+        link: null
+        nome: MoritzLaurer/mDeBERTa-v3-base-mnli-xnli
+        revision: main
+        local_files_only: false
+      batch_size: 8
+      max_length: 256
+      rejection:
+        label: indefinido
+        min_entailment: 0.5
+        min_margin: 0.08
+      candidates:
+      - label: autenticacao
+        hypothesis: 'A solicitação trata de autenticação ou autorização: senha, login, conta bloqueada ou
+          permissão de acesso.'
+      - label: financeiro
+        hypothesis: 'A solicitação trata de operações financeiras ou fiscais: cobrança, pagamento, faturamento,
+          notas fiscais, tesouraria ou software usado nessas operações.'
+      - label: conectividade
+        hypothesis: 'A solicitação trata de conectividade de rede: internet, Wi-Fi, VPN, conexão com servidor
+          ou comunicação entre computadores.'
+      - label: aplicativos
+        hypothesis: 'A solicitação trata do funcionamento de um aplicativo de uso geral: navegador, editor,
+          planilha ou email, sem um assunto específico de finanças, recursos humanos, login ou rede.'
+      - label: hardware
+        hypothesis: 'A solicitação trata de defeito físico em equipamento ou componente: teclado, mouse, monitor,
+          impressora, disco, memória, processador, placa, fonte ou computador.'
+      - label: recursos_humanos
+        hypothesis: 'A solicitação trata de recursos humanos: folha de pagamento, registro de ponto, férias,
+          benefícios, recrutamento ou software usado nesses processos.'
+
+    urgency:
+      range:
+      - 0.0
+      - 1.0
+      context_characters: 700
+      candidates:
+      - hypothesis: 'Considerando o relato, o sentimento e o assunto, a demanda pode
+          aguardar: é informativa, preventiva ou sem impacto imediato.'
+        value: 0.0
+      - hypothesis: 'Considerando o relato, o sentimento e o assunto, a demanda tem
+          urgência moderada: há dificuldade, mas o trabalho continua.'
+        value: 0.3333333333333333
+      - hypothesis: 'Considerando o relato, o sentimento e o assunto, a demanda tem
+          urgência alta: uma atividade importante está bloqueada.'
+        value: 0.6666666666666666
+      - hypothesis: 'Considerando o relato, o sentimento e o assunto, a demanda é
+          crítica: há paralisação ampla, risco imediato ou prazo inadiável.'
+        value: 1.0
+
+    outputs:
+    - name: sentiment_score
+      dtype: float
+      action: replace
+      range:
+      - -1
+      - 1
+    - name: main_topic
+      dtype: string
+      action: add
+    - name: semantic_margin
+      dtype: float
+      action: add
+      range:
+      - 0
+      - 1
+    - name: urgency_score
+      dtype: float
+      action: add
+      range:
+      - 0
+      - 1
+
+  deep_learning:
+    enabled: true
+    role: feature_generator
+    adapter: tabular_profiles
+    features:
+    - sla_hours
+    - sentiment_score
+    - num_words
+    - device_type
+    - os
+    - network_type
+    depends_on:
+    - pln
+    device: auto
+
+    preprocessing:
+      numeric:
+      - sla_hours
+      - sentiment_score
+      - num_words
+      categorical:
+      - device_type
+      - os
+      - network_type
+
+    network:
+      hidden_dim: 32
+      latent_dim: 8
+
+    clustering:
+      n_clusters: 6
+
+    training:
+      epochs: 30
+      batch_size: 64
+      patience: 5
+      learning_rate: 0.001
+
+    outputs:
+    - name: tabular_profile_cluster
+      dtype: category
+      action: add
+
+# Fusão de features, busca somente no treino/validação, enquanto o teste avalia apenas o vencedor.
+# Classes seguem a lista do target original.
+multimodal:
+  enabled: true
+
+  classes:
+  - Software
+  - Rede
+  - Hardware
+  - RH
+  - Acesso
+  - Financeiro
+
+  device: auto
+  features:
+    numeric:
+    - sla_hours
+    - sentiment_score
+    - num_words
+    - image_score
+    - semantic_margin
+    - urgency_score
+
+    categorical:
+    - device_type
+    - os
+    - network_type
+    - main_topic
+    - tabular_profile_cluster
+
+    text:
+      ticket:
+      - title
+      - description
+
+      image:
+      - image_description
+
+  training:
+    epochs: 40
+    patience: 6
+    min_delta: 0.0001
+    logistic_max_iter: 1000
+    cpu_threads: 2
+
+  search:
+    metric: f1_macro
+    spaces:
+      logistic:
+        trials: 6
+        parameters:
+          text_max_features:
+          - 1500
+          - 3000
+
+          text_min_df:
+          - 1
+          - 2
+
+          text_ngram_max:
+          - 1
+          - 2
+
+          class_weight:
+          - null
+          - balanced
+
+          C:
+          - 0.1
+          - 1.0
+          - 10.0
+          
+      mlp:
+        trials: 6
+        parameters:
+          text_max_features:
+          - 1500
+          - 3000
+
+          text_min_df:
+          - 1
+          - 2
+
+          text_ngram_max:
+          - 1
+          - 2
+
+          class_weight:
+          - null
+          - balanced
+
+          hidden_dims:
+          - - 64
+          - - 128
+            - 64
+
+          dropout:
+          - 0.1
+          - 0.3
+
+          learning_rate:
+          - 0.0003
+          - 0.001
+
+          weight_decay:
+          - 0.0
+          - 0.0001
+
+          batch_size:
+          - 64
+          - 128
+
+  reports_directory: reports/fusion
+  
+reports:
+  directory: reports/runs
