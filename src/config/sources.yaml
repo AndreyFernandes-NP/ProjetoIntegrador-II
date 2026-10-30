@@ -1,0 +1,48 @@
+# =============================================================================
+# Configuração de Dados
+# =============================================================================
+dataset:
+  entrada: data/clean/chamados-clean.csv
+  saida: data/processed/chamados.parquet
+  leitura:
+    sep: ','
+    encoding: utf-8-sig
+
+# Tipos: string | Int64 | Float64 | boolean | datetime | category
+# errors: raise interrompe em valores inválidos enquanto coerce transforma em nulos.
+transformacoes:
+  ticket_id: {cast: string}
+  sla_hours: {cast: Float64}
+  resolution_time_hours: {cast: Float64}
+  sentiment_score: {cast: Float64}  # Valor original; PLN substitui só no dataset enriquecido.
+  num_words: {cast: Float64}
+  image_path: {cast: string}
+  title: {cast: string}
+  description: {cast: string}
+  target_category: {cast: string}
+
+qualidade:
+  relatorio: reports/data/quality.json
+  cols_obrigatorias: [ticket_id, target_category, title, description, image_path, sla_hours, sentiment_score, num_words, device_type, os, network_type]
+  cols_nao_nulas: [ticket_id, target_category, description, image_path]
+  cols_unicas: [ticket_id]
+  cols_numericas: [sla_hours, sentiment_score, num_words]
+  valores_permitidos:
+    target_category: [Software, Rede, Hardware, RH, Acesso, Financeiro]
+  intervalos:
+    sla_hours: {min: 0}
+    num_words: {min: 0}
+    sentiment_score: {min: -1, max: 1}
+  limite_nulos:
+    fracao: 0.95
+    severidade: warning  # warning | error
+    # Sem "colunas", inspeciona todas. Exemplo: colunas: [company, vip]
+  textos:
+    colunas: []
+    target_col: target_category
+  imagens:
+    coluna: image_path
+    base_dir: data  # images/arquivo.png é relativo a data/
+    attachment_col: 
+
+drop_cols: [latitude, longitude, created_at, customer_id, city_x, state_x, browser, historical_tickets, has_attachment, company, segment, employees, city_y, state_y, contract_type, customer_since, vip, monthly_revenue, num_events, last_event_date, event_types, num_abertura, num_updates, num_encerramento, num_images_y]

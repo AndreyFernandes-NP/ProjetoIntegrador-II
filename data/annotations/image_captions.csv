@@ -1,0 +1,27 @@
+image_path,image_sha256,caption
+images/access_denied.png,8105589f2c78c538ee13af1b76dea6dfb0930372860cacdb6801f473b2a6faf6,A laptop screen displays a red access denied message.
+images/browser.png,561a928fbcf2336af41bcbe181f40cd398ab5c65cc2d36a9440be57ec0cba741,A web browser displays the Gmail logo on a white loading screen.
+images/cooler.png,7cded9cd6c5b98fdeb9833a49c81bd4016fd753e7a349e341af6ec2fab434e18,An open desktop computer case shows internal fans and components.
+images/default_access.png,b64615e1cebff581d7302305cea62f1c1b5dd24bfdd31faf7ecf71d9ce750e05,A computer dialog displays a red error icon and an access denied message.
+images/default_finance.png,95f9667b718a8eb742c785a6f875ff49a3d8c5391874d202e53081110084dd5b,A hand holds a smartphone displaying a financial trading chart.
+images/default_hardware.png,15eeb78955bd27382806c8f85ed5df9b0481757411209b249c13b49671dba30b,A person uses a laptop beside exposed electronic hardware and cables.
+images/default_hr.png,d7d4c1bb2452bcac7a7c869bf3147b08b9e66d7479427f8dad8f0a835ebd7af6,A person looks at a human resources dashboard on a desktop monitor.
+images/default_network.png,10ceffbcbe9663e12a42eae3462a5a305a91a7616421d427d6d545f11aa6e86a,Network cables are connected to numbered ports on a patch panel.
+images/default_software.png,ae1487fa2d50d9488d8719c476f1235097ec004492d8d00a1163acfb3d0ad3ea,A person types at a desk with computer monitors displaying source code.
+images/email.png,25afa49ebd699ae7001e94e6e671e71dd316d403b677a6faf27cb1bab00168f1,A laptop screen displays a Gmail inbox in a web browser.
+images/finance_report.png,40d7e994a67339fba798c15117d4af9eb13616183814f1c9a96c97c1366b0367,A laptop displays charts beside a printed financial report on a desk.
+images/hard_drive.png,f8ef54090c55fdf9a5b360e16362c194715b2945412fcc7bf712f565968a8c53,An open hard disk drive shows its circular platter and actuator arm.
+images/hr_portal.png,84729e6b1602560e96d6193096f933b6b994f7f4b7a1476be676f18bc7b99b7a,"A website displays a welcome banner, employee resources and news sections."
+images/keyboard.png,5cbbdf03abba15426c10b949e93e970b3921a2efe77f38a0d5329f91d04ac937,A black computer keyboard rests on a light surface.
+images/login.png,231c675d8c814fd285b29939af6fd92bcba769ab52fa201b16412e04c6fa4052,A website login form contains account and password fields and a login button.
+images/monitor.png,59a66e62af1bd11c74ac1a550cd6eef0a18aaafd78d78e00431921e1e06a42b4,A desktop monitor displays a design application with several page layouts.
+images/motherboard.png,6bcf627584c35c3b2f7888684eadb3696f9953880c5682302ab9d0ec83d7391d,"A computer motherboard has expansion slots, connectors and a cooling fan."
+images/mouse.png,dc1eecab4d58a921f96440611dcd9ef6ff8745d0af8f8b3119cfb83dd021b18a,A gray wireless computer mouse rests on a light surface.
+images/network.png,3d7ff9d021f7974dab0ff0e4cd1461b37d5063bf4dd39bbeb2d4d9033d0c5361,A router with two antennas is connected to network and power cables.
+images/office.png,487d2aecd94e6f0141902754c5b7c29be36c2af50dd4c8d49933cf3207b3bca3,A finger points at numeric cells in a spreadsheet.
+images/payroll.png,4570b03e21e1b21f9d7351b886f96768259c821b1a56a28ee03c0696771bc056,A pen rests on a printed payroll table containing employee numbers and amounts.
+images/power_supply.png,397453377a8779de69892b65247fde629bf588fc98d09044570ef72b756081d5,A black laptop power adapter and its cable lie on a yellow background.
+images/recruitment.png,2abbf88d85c96272462c4d0e13cd7737f277153de7512be011af2a5924227428,A computer screen displays a LinkedIn Recruiter page with explanatory text.
+images/sap_erp.png,d9c370d4c8638991cc6c6bfc1917704b5dc4c09f46d3cb0271f066354e186b8a,"A computer screen displays a dashboard with charts, tables and a flow diagram."
+images/server.png,da588050dbb75f9880b834f4320e612f4e2fb17916afb8abc58db361428d3410,A server rack contains electronic equipment and colored cables.
+images/vpn.png,96e731f30d3932f9a9702746e2765057c1054ffa644d392018bfd11b5ecbbeaf,A tablet displays a blue VPN application screen.
