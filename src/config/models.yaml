@@ -3,11 +3,11 @@
 # =============================================================================
 # Ordem: visão -> PLN -> tabular, todos com split.seed: 42.
 # fonte.link: URL do REPOSITÓRIO Hugging Face, tem prioridade sobre fonte.nome.
-# Os adaptadores exigem arquiteturas compatíveis (BLIP / classificação NLI).
+# Adaptadores: BLIP, NLI de sentimento e encoder semântico com mean pooling.
 # Downloads: models/huggingface, pesos ajustados: models/runs/<execução>/.
 # BLIP produz descrições em inglês enquanto o PLN aceita texto em português/inglês.
 # image_score: média geométrica das probabilidades dos tokens de conteúdo.
-# semantic_margin: diferença de suporte NLI entre os dois melhores tópicos (não calibrada).
+# text_*_similarity: cossenos em [-1, 1] para similaridades de texto.
 # tabular_profile_cluster: é um código nominal e não ordem de urgência nem target.
 schema_version: 3
 
@@ -40,7 +40,7 @@ enrichment:
   - visao_computacional
   - pln
   - deep_learning
-  max_new_columns: 6
+  max_new_columns: 10
   allow_overwrite:
   - sentiment_score
 
@@ -90,7 +90,7 @@ modelos:
   pln:
     enabled: true
     role: feature_generator
-    adapter: contextual_nli
+    adapter: semantic_nlp
     features:
     - title
     - description
@@ -116,62 +116,39 @@ modelos:
           positiva.
         value: 1.0
 
-    # Convenção: classificar o assunto. Sistemas financeiros/RH pertencem ao domínio.
-    # Login/permissão e rede só quando esse for o problema descrito, não mera ação.
-    # Não há regra de palavra-chave nem correção usando target_category.
-    # Rejeição é um estado de incerteza; não participa como hipótese concorrente.
-    # Limiares iniciais, ainda NÃO calibrados em anotações humanas.
-    topics:
-      scoring: entailment
+    # Uma coluna por grupo; cada valor é o maior cosseno com seus exemplos.
+    # Ambos os campos são codificados separadamente e combinados com peso igual.
+    # Ao mudar grupos, sincronize outputs, multimodal.features e max_new_columns.
+    semantic:
       fonte:
         link: null
-        nome: MoritzLaurer/mDeBERTa-v3-base-mnli-xnli
-        revision: main
+        nome: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+        revision: e8f8c211226b894fcb81acc59f3b34ba3efd5f42
         local_files_only: false
-      batch_size: 8
-      max_length: 256
-      rejection:
-        label: indefinido
-        min_entailment: 0.5
-        min_margin: 0.08
-      candidates:
-      - label: autenticacao
-        hypothesis: 'A solicitação trata de autenticação ou autorização: senha, login, conta bloqueada ou
-          permissão de acesso.'
-      - label: financeiro
-        hypothesis: 'A solicitação trata de operações financeiras ou fiscais: cobrança, pagamento, faturamento,
-          notas fiscais, tesouraria ou software usado nessas operações.'
-      - label: conectividade
-        hypothesis: 'A solicitação trata de conectividade de rede: internet, Wi-Fi, VPN, conexão com servidor
-          ou comunicação entre computadores.'
-      - label: aplicativos
-        hypothesis: 'A solicitação trata do funcionamento de um aplicativo de uso geral: navegador, editor,
-          planilha ou email, sem um assunto específico de finanças, recursos humanos, login ou rede.'
-      - label: hardware
-        hypothesis: 'A solicitação trata de defeito físico em equipamento ou componente: teclado, mouse, monitor,
-          impressora, disco, memória, processador, placa, fonte ou computador.'
-      - label: recursos_humanos
-        hypothesis: 'A solicitação trata de recursos humanos: folha de pagamento, registro de ponto, férias,
-          benefícios, recrutamento ou software usado nesses processos.'
+        
+      batch_size: 32
+      max_length: 128
 
-    urgency:
-      range:
-      - 0.0
-      - 1.0
-      context_characters: 700
-      candidates:
-      - hypothesis: 'Considerando o relato, o sentimento e o assunto, a demanda pode
-          aguardar: é informativa, preventiva ou sem impacto imediato.'
-        value: 0.0
-      - hypothesis: 'Considerando o relato, o sentimento e o assunto, a demanda tem
-          urgência moderada: há dificuldade, mas o trabalho continua.'
-        value: 0.3333333333333333
-      - hypothesis: 'Considerando o relato, o sentimento e o assunto, a demanda tem
-          urgência alta: uma atividade importante está bloqueada.'
-        value: 0.6666666666666666
-      - hypothesis: 'Considerando o relato, o sentimento e o assunto, a demanda é
-          crítica: há paralisação ampla, risco imediato ou prazo inadiável.'
-        value: 1.0
+      prototypes:
+        text_failure_similarity:
+        - O sistema apresenta um erro e não funciona.
+        - O equipamento parou de funcionar e preciso de reparo.
+        - Não consigo realizar minha atividade porque o serviço está indisponível.
+
+        text_access_request_similarity:
+        - Solicito criação de uma conta e liberação de acesso.
+        - Preciso de permissão para utilizar o sistema.
+        - Quero redefinir minha senha para acessar minha conta.
+
+        text_guidance_similarity:
+        - Tenho uma dúvida e preciso de orientação para usar o sistema.
+        - Gostaria de saber como realizar esta operação.
+        - Solicito informações e instruções sobre o serviço.
+
+        text_performance_similarity:
+        - O sistema está lento e demora muito para responder.
+        - A aplicação fica travando durante o uso.
+        - O processamento demora e preciso melhorar o desempenho.
 
     outputs:
     - name: sentiment_score
@@ -180,20 +157,29 @@ modelos:
       range:
       - -1
       - 1
-    - name: main_topic
-      dtype: string
-      action: add
-    - name: semantic_margin
+    - name: text_failure_similarity
       dtype: float
       action: add
       range:
-      - 0
+      - -1
       - 1
-    - name: urgency_score
+    - name: text_access_request_similarity
       dtype: float
       action: add
       range:
-      - 0
+      - -1
+      - 1
+    - name: text_guidance_similarity
+      dtype: float
+      action: add
+      range:
+      - -1
+      - 1
+    - name: text_performance_similarity
+      dtype: float
+      action: add
+      range:
+      - -1
       - 1
 
   deep_learning:
@@ -239,8 +225,6 @@ modelos:
       dtype: category
       action: add
 
-# Fusão de features, busca somente no treino/validação, enquanto o teste avalia apenas o vencedor.
-# Classes seguem a lista do target original.
 multimodal:
   enabled: true
 
@@ -259,14 +243,15 @@ multimodal:
     - sentiment_score
     - num_words
     - image_score
-    - semantic_margin
-    - urgency_score
+    - text_failure_similarity
+    - text_access_request_similarity
+    - text_guidance_similarity
+    - text_performance_similarity
 
     categorical:
     - device_type
     - os
     - network_type
-    - main_topic
     - tabular_profile_cluster
 
     text:
@@ -281,38 +266,13 @@ multimodal:
     epochs: 40
     patience: 6
     min_delta: 0.0001
-    logistic_max_iter: 1000
     cpu_threads: 2
 
   search:
     metric: f1_macro
     spaces:
-      logistic:
-        trials: 6
-        parameters:
-          text_max_features:
-          - 1500
-          - 3000
-
-          text_min_df:
-          - 1
-          - 2
-
-          text_ngram_max:
-          - 1
-          - 2
-
-          class_weight:
-          - null
-          - balanced
-
-          C:
-          - 0.1
-          - 1.0
-          - 10.0
-          
       mlp:
-        trials: 6
+        trials: 12
         parameters:
           text_max_features:
           - 1500
@@ -331,13 +291,15 @@ multimodal:
           - balanced
 
           hidden_dims:
+          - - 32
           - - 64
-          - - 128
-            - 64
+          - - 32
+            - 16
 
           dropout:
           - 0.1
           - 0.3
+          - 0.5
 
           learning_rate:
           - 0.0003
@@ -346,8 +308,10 @@ multimodal:
           weight_decay:
           - 0.0
           - 0.0001
+          - 0.001
 
           batch_size:
+          - 32
           - 64
           - 128
 

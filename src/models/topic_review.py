@@ -22,7 +22,10 @@ def review_topics(input_path: Path, config_path: Path, *, root: Path = PATHS.roo
     """Reclassifica textos distintos e salva CSV editável, configuração e resumo."""
     config = load_yaml(project_path(config_path, root))
     names = validate_features_config(config)
-    name = next(n for n in names if config["modelos"][n]["adapter"] == "contextual_nli")
+    name = next((n for n in names if config["modelos"][n]["adapter"] == "contextual_nli"), None)
+    if name is None:
+        raise ValueError("A configuração atual usa similaridades semânticas e não gera main_topic. "
+                         "Para revisar tópicos antigos, informe o models.yaml da execução legada.")
 
     cfg = config["modelos"][name]
     if cfg["topics"].get("scoring") != "entailment" or "fonte" not in cfg["topics"]:

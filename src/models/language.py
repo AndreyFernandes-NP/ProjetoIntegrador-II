@@ -1,8 +1,8 @@
 """
 language.py
 -----------
-Utiliza modelos NLI para recalcular sentimento, identificar tópicos com rejeição
-de casos ambíguos e estimar urgência com o contexto dado.
+Recalcula sentimento por NLI e gera similaridades semânticas de título e descrição.
+Mantém o adaptador de tópicos anterior para restaurar execuções legadas.
 """
 from pathlib import Path
 from typing import Self
@@ -293,4 +293,125 @@ class ContextualNLP(FeatureStage):
         instance.device = device_for(config.get("device", "auto"))
         instance._load(directory / "model")
         instance.prepare_topics(directory / "topic_model" if "fonte" in config["topics"] else None)
+        return instance
+
+
+def validate_semantic_settings(config: dict) -> None:
+    """Valida exemplos, entradas e limites do PLN sem carregar ou baixar modelos."""
+    from src.models.feature_common import hf_source
+
+    if config.get("features") != ["title", "description"]:
+        raise ValueError("PLN semântico exige features: [title, description], nessa ordem")
+    if "topics" in config or "urgency" in config:
+        raise ValueError("semantic_nlp substitui topics/urgency; remova essas configurações")
+    settings = config["semantic"]
+    hf_source(settings["fonte"])
+    for section, minimum in ((config, 16), (settings, 8)):
+        for key, lower in (("batch_size", 1), ("max_length", minimum)):
+            if type(section.get(key)) is not int or section[key] < lower:
+                raise ValueError(f"PLN: {key} deve ser inteiro >= {lower}")
+    prototypes = settings.get("prototypes")
+    if not isinstance(prototypes, dict) or not prototypes:
+        raise ValueError("semantic.prototypes deve mapear colunas a listas de exemplos")
+    for name, examples in prototypes.items():
+        if not isinstance(name, str) or not name.isidentifier() or not name.startswith("text_"):
+            raise ValueError("Colunas semânticas devem ser identificadores iniciados por text_")
+        if (not isinstance(examples, list) or not examples
+                or not all(isinstance(v, str) and v.strip() for v in examples)):
+            raise ValueError(f"Informe exemplos textuais não vazios para {name}")
+        if len(set(examples)) != len(examples):
+            raise ValueError(f"Exemplos repetidos em {name}")
+    candidates = config["sentiment"]["candidates"]
+    hypotheses = [c["hypothesis"] for c in candidates]
+    if (len(candidates) < 2 or not all(isinstance(h, str) and h.strip() for h in hypotheses)
+            or len(set(hypotheses)) != len(hypotheses)):
+        raise ValueError("Candidatos de sentimento devem ser distintos e não vazios")
+    values = np.asarray([c["value"] for c in candidates], dtype=float)
+    if not np.isfinite(values).all() or (values < -1).any() or (values > 1).any():
+        raise ValueError("Valores de sentimento devem estar em [-1, 1]")
+
+
+class SemanticNLP(ContextualNLP):
+    """Combina o sentimento existente com similaridades independentes, sem prever target."""
+
+    def fit(self, train: pd.DataFrame, validation: pd.DataFrame) -> Self:
+        """Carrega redes congeladas e codifica exemplos do YAML sem ajustar aos chamados.
+
+        As partições não são usadas para aprender rótulos ou alterar protótipos.
+        A assinatura mantém o contrato comum das três etapas geradoras.
+        """
+        from src.models.semantic_text import SemanticTextEncoder
+
+        validate_semantic_settings(self.config)
+        set_seed(self.seed)
+        self.device = device_for(self.config.get("device", "auto"))
+        sentiment_path = download_pretrained(self.config["fonte"], self.root)
+        self._load(sentiment_path)
+        settings = self.config["semantic"]
+        semantic_path = download_pretrained(settings["fonte"], self.root)
+        self.encoder = SemanticTextEncoder(semantic_path, str(self.device),
+                                          settings["batch_size"], settings["max_length"])
+        self.prototypes = self.encoder.prototype_vectors(settings["prototypes"])
+        self.details.update(pretrained_snapshot=str(sentiment_path),
+                            pretrained_commit=sentiment_path.name,
+                            semantic_snapshot=str(semantic_path), semantic_commit=semantic_path.name,
+                            fitted_on_target=False, tasks=["sentiment", "semantic_similarities"],
+                            semantic_columns=list(self.prototypes),
+                            pooling="masked_mean", field_combination="normalized_equal_weight",
+                            similarity="max_cosine_per_prototype_group", score_range=[-1, 1])
+        return self
+
+    def transform(self, data: pd.DataFrame) -> pd.DataFrame:
+        """Substitui sentimento e gera apenas as similaridades declaradas no YAML.
+
+        Preserva o cálculo anterior do sentimento. O encoder semântico normaliza
+        espaços, deduplica textos e combina título/descrição com pesos iguais.
+        """
+        from src.data.processor import require_columns
+        from src.models.semantic_text import intent_similarities
+
+        require_columns(data, self.config["features"], "PLN semântico")
+        if data.empty:
+            raise ValueError("Nenhum chamado para enriquecer")
+        texts = data[self.config["features"]].astype("string").fillna("").agg("\n".join, axis=1)
+        if texts.str.strip().eq("").any():
+            raise ValueError("Título e descrição não podem estar ambos vazios")
+        unique = texts.drop_duplicates().tolist()
+        candidates = self.config["sentiment"]["candidates"]
+        scores = weighted_score(self.probabilities(unique, [c["hypothesis"] for c in candidates]),
+                                [c["value"] for c in candidates])
+        sentiment = pd.Series(scores, index=unique)
+        vectors, _ = self.encoder.encode_frame(data[self.config["features"]])
+        result = intent_similarities(vectors, self.prototypes)
+        result.index = data.index
+        result.insert(0, "sentiment_score", sentiment.loc[texts.tolist()].to_numpy())
+        return result[[s["name"] for s in self.config["outputs"]]]
+
+    def save(self, directory: Path) -> None:
+        """Persiste ambas as redes e os exemplos codificados dentro de models/runs/."""
+        save_metadata(self, directory)
+        self.model.save_pretrained(directory / "model", safe_serialization=True)
+        self.tokenizer.save_pretrained(directory / "model")
+        self.encoder.save(directory / "semantic_model")
+        np.savez_compressed(directory / "semantic_prototypes.npz", **self.prototypes)
+
+    @classmethod
+    def restore(cls, directory: Path, config: dict, root: Path, seed: int = 42) -> Self:
+        """Restaura redes e protótipos salvos, sem downloads, fit ou leitura do target."""
+        from src.models.semantic_text import SemanticTextEncoder, unit_vectors
+
+        validate_semantic_settings(config)
+        instance = cls(config, root, seed)
+        instance.device = device_for(config.get("device", "auto"))
+        instance._load(directory / "model")
+        settings = config["semantic"]
+        instance.encoder = SemanticTextEncoder(directory / "semantic_model", str(instance.device),
+                                              settings["batch_size"], settings["max_length"])
+        with np.load(directory / "semantic_prototypes.npz", allow_pickle=False) as archive:
+            if set(archive.files) != set(settings["prototypes"]):
+                raise ValueError("Protótipos salvos não correspondem à configuração da execução")
+            instance.prototypes = {name: unit_vectors(archive[name]) for name in settings["prototypes"]}
+        for name, vectors in instance.prototypes.items():
+            if vectors.shape != (len(settings["prototypes"][name]), instance.encoder.model.config.hidden_size):
+                raise ValueError(f"Dimensões incompatíveis nos protótipos de {name}")
         return instance

@@ -348,7 +348,7 @@ def get_or_create_split(df: pd.DataFrame, models_config: dict, *, root: Path = P
     elif not dry_run:
         write_json(destination, report)
 
-    print(f"[Split / {'reutilizado' if reused else 'simulado' if dry_run else 'criado'}] " +
+    print(f"[Split / {'Reutilizado' if reused else 'Simulado' if dry_run else 'Criado'}] " +
           ", ".join(f"{part}={len(frames[part])}" for part in PARTS))
     
     for message in warnings:

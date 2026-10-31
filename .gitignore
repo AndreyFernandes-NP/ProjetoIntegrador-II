@@ -39,10 +39,10 @@ pip-delete-this-directory.txt
 # Hugging Face models
 /models/
 
-# Processed and Enriched Datasets
-/data/processed/
+# Enriched Datasets and Final Metrics
 /reports/runs/
 /reports/data/
+/reports/fusion/
 
 # Unit test / coverage reports
 htmlcov/

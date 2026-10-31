@@ -19,18 +19,35 @@ from src.data.processor import load_yaml, project_path, require_columns
 from src.data.splitter import get_or_create_split, PARTS, split_config
 from src.data.validator import write_json
 from src.models.feature_common import download_pretrained, hf_source
-from src.models.language import ContextualNLP, validate_topic_settings
+from src.models.language import ContextualNLP, SemanticNLP, validate_topic_settings, validate_semantic_settings
 from src.models.profiles import TabularProfiles
 from src.models.vision import ImageCaptioner, caption_partitions
 from src.models.reporting import RunReport, file_hash
 
-ADAPTERS = {"blip_captioning": ImageCaptioner, "contextual_nli": ContextualNLP, "tabular_profiles": TabularProfiles}
+ADAPTERS = {"blip_captioning": ImageCaptioner, "contextual_nli": ContextualNLP,
+            "semantic_nlp": SemanticNLP, "tabular_profiles": TabularProfiles}
+LANGUAGE_ADAPTERS = {"contextual_nli", "semantic_nlp"}
 CONTRACTS = {
     "blip_captioning": {"image_description": ("string", "add"), "image_score": ("float", "add")},
     "contextual_nli": {"sentiment_score": ("float", "replace"), "main_topic": ("string", "add"),
                        "semantic_margin": ("float", "add"), "urgency_score": ("float", "add")},
     "tabular_profiles": {"tabular_profile_cluster": ("category", "add")},
 }
+
+def output_contract(cfg: dict) -> dict[str, tuple[str, str]]:
+    """Deriva o contrato semântico das colunas configuradas e mantém os legados."""
+    if cfg["adapter"] == "semantic_nlp":
+        validate_semantic_settings(cfg)
+
+        return {"sentiment_score": ("float", "replace"),
+                **{name: ("float", "add") for name in cfg["semantic"]["prototypes"]}}
+    
+    return CONTRACTS[cfg["adapter"]]
+
+def added_column_count(config: dict) -> int:
+    """Conta novas colunas pelos contratos; substituições não ampliam o dataset."""
+
+    return sum(spec["action"] == "add" for name in config["enrichment"]["stages"] for spec in config["modelos"][name]["outputs"])
 
 def positive_integer(value, field: str) -> None:
     """Valida parâmetros de tamanho/treino antes de baixar os modelos."""
@@ -81,14 +98,19 @@ def validate_features_config(config: dict) -> list[str]:
         specs = cfg["outputs"]
         declared = {s["name"]: (s["dtype"], s["action"]) for s in specs}
 
-        if len(declared) != len(specs) or declared != CONTRACTS[adapter]:
-            raise ValueError(f"Outputs incompatíveis com {adapter}: {CONTRACTS[adapter]}")
+        expected = output_contract(cfg)
+        if len(declared) != len(specs) or declared != expected or forbidden.intersection(declared):
+            raise ValueError(f"Outputs incompatíveis com {adapter}: {expected}")
         
         generated.extend(declared)
         adapters.append(adapter)
 
-        if adapter in {"blip_captioning", "contextual_nli"}:
+        if adapter in {"blip_captioning", *LANGUAGE_ADAPTERS}:
             hf_source(cfg["fonte"])
+
+        if adapter == "semantic_nlp":
+            if any(spec.get("range") != [-1, 1] for spec in specs):
+                raise ValueError("Sentimento e similaridades semânticas exigem range: [-1, 1]")
 
         if adapter == "blip_captioning":
             if len(features) != 1:
@@ -145,7 +167,7 @@ def validate_features_config(config: dict) -> list[str]:
                 raise ValueError("range de urgency_score deve coincidir com urgency.range")
             
         if adapter == "tabular_profiles":
-            language_names = [n for n in seen if config["modelos"][n]["adapter"] == "contextual_nli"]
+            language_names = [n for n in seen if config["modelos"][n]["adapter"] in LANGUAGE_ADAPTERS]
 
             if not language_names or language_names[0] not in cfg.get("depends_on", []):
                 raise ValueError("Perfis tabulares devem depender explicitamente da etapa PLN")
@@ -168,13 +190,16 @@ def validate_features_config(config: dict) -> list[str]:
             
         seen.append(name)
 
-    if set(adapters) != set(ADAPTERS) or len(generated) != len(set(generated)):
+    if (adapters.count("blip_captioning") != 1 or adapters.count("tabular_profiles") != 1
+            or sum(a in LANGUAGE_ADAPTERS for a in adapters) != 1
+            or len(generated) != len(set(generated))):
+        
         raise ValueError("Configure um adaptador de cada modalidade, sem outputs duplicados")
     
     limit = config["enrichment"]["max_new_columns"]
     positive_integer(limit, "max_new_columns")
 
-    if sum(s["action"] == "add" for n in names for s in config["modelos"][n]["outputs"]) > limit:
+    if added_column_count(config) > limit:
         raise ValueError("Número de novas colunas excede max_new_columns")
     
     return names
@@ -227,7 +252,7 @@ def merge_outputs(frame: pd.DataFrame, outputs: pd.DataFrame, cfg: dict) -> pd.D
     return result
 
 def download_feature_models(config: dict, root: Path = PATHS.root) -> dict[str, Path]:
-    """Baixa checkpoints habilitados, incluindo fonte específica de tópicos; não treina."""
+    """Baixa checkpoints habilitados, incluindo o encoder semântico; não treina."""
     paths = {}
 
     for name in validate_features_config(config):
@@ -238,11 +263,14 @@ def download_feature_models(config: dict, root: Path = PATHS.root) -> dict[str, 
 
         if cfg.get("adapter") == "contextual_nli" and "fonte" in cfg["topics"]:
             paths[f"{name}.topics"] = download_pretrained(cfg["topics"]["fonte"], root)
+
+        if cfg.get("adapter") == "semantic_nlp":
+            paths[f"{name}.semantic"] = download_pretrained(cfg["semantic"]["fonte"], root)
             
     return paths
 
 def run_features(config_path=None, *, df=None, split_result=None, dry_run=False, rebuild_split=False, sources_path=None, root: Path = PATHS.root):
-    """Gera sete saídas com ajuste só no treino e relatório por execução.
+    """Gera as saídas configuradas com ajuste só no treino e relatório por execução.
 
     Retorna o diretório do relatório, ou None em dry-run. A saída enriquecida é
     reports/runs/<execução>/enriched.parquet, os pesos ficam em models/runs/<execução>.
@@ -297,7 +325,9 @@ def run_features(config_path=None, *, df=None, split_result=None, dry_run=False,
             print(f"[Visão] Imagens únicas por partição: {counts}")
     
     if dry_run:
-        print("[Features / dry-run] 6 novas colunas; substituição de sentiment_score; apenas geração de features")
+        print(f"[Features / dry-run] {added_column_count(config)} novas colunas; "
+              "substituição de sentiment_score; apenas geração de features")
+        
         return None
 
     report = RunReport(project_path(config.get("reports", {}).get("directory", "reports/runs"), root), config, root)
@@ -357,7 +387,7 @@ def run_features(config_path=None, *, df=None, split_result=None, dry_run=False,
         enriched.to_parquet(temporary, index=False)
         temporary.replace(directory / "enriched.parquet")
 
-        report.metadata.update(rows=len(enriched), added_columns=6, replaced_columns=["sentiment_score"],
+        report.metadata.update(rows=len(enriched), added_columns=added_column_count(config), replaced_columns=["sentiment_score"],
             model_artifacts_sha256={str(p.relative_to(artifact_root)): file_hash(p) for p in artifact_root.rglob("*") if p.is_file()})
         report.finish()
 

@@ -1,8 +1,8 @@
 """
 fusion_pipeline.py
 ------------------
-Busca hiperparâmetros do classificador multimodal usando a divisão já persistida,
-seleciona pela validação e avalia somente o vencedor no conjunto de teste.
+Busca hiperparâmetros da MLP multimodal usando a divisão já persistida, seleciona
+pela validação e avalia somente o vencedor no teste. Aceita configurações legadas.
 """
 import argparse
 from importlib.metadata import version
@@ -64,7 +64,7 @@ def validate_fusion_config(config: dict) -> dict:
     if cfg["search"]["metric"] not in {"accuracy", "balanced_accuracy", "f1_macro"}:
         raise ValueError("Métrica de seleção inválida")
     
-    for key in ("epochs", "patience", "logistic_max_iter", "cpu_threads"):
+    for key in ("epochs", "patience", "cpu_threads"):
         value = cfg["training"][key]
         if type(value) is not int or value < 1:
             raise ValueError(f"training.{key} deve ser inteiro positivo")
@@ -76,6 +76,11 @@ def validate_fusion_config(config: dict) -> dict:
     spaces = cfg["search"]["spaces"]
     if not spaces or set(spaces) - {"logistic", "mlp"}:
         raise ValueError("Espaços disponíveis: logistic e mlp")
+
+    if "logistic" in spaces:
+        value = cfg["training"].get("logistic_max_iter")
+        if type(value) is not int or value < 1:
+            raise ValueError("training.logistic_max_iter deve ser positivo quando logistic estiver habilitado")
     
     common = {"text_max_features", "text_min_df", "text_ngram_max", "class_weight"}
     for kind, space in spaces.items():
