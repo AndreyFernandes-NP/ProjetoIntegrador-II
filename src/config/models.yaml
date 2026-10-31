@@ -65,16 +65,18 @@ modelos:
     training:
       enabled: true
       captions_file: data/annotations/image_captions.csv
-      epochs: 2
+      epochs: 3
       batch_size: 2
-      patience: 1
-      learning_rate: 1.0e-05
+      patience: 2
+      learning_rate: 5.0e-06
       unfreeze_last_layers: 1
       max_length: 48
 
     generation:
       num_beams: 3
       max_new_tokens: 24
+      repetition_penalty: 1.15
+      no_repeat_ngram_size: 2
 
     outputs:
     - name: image_description
@@ -272,48 +274,38 @@ multimodal:
     metric: f1_macro
     spaces:
       mlp:
-        trials: 12
+        trials: 1
         parameters:
           text_max_features:
           - 1500
-          - 3000
 
           text_min_df:
-          - 1
           - 2
 
           text_ngram_max:
-          - 1
           - 2
 
           class_weight:
           - null
-          - balanced
 
           hidden_dims:
-          - - 32
           - - 64
-          - - 32
-            - 16
+            - 128
 
           dropout:
-          - 0.1
           - 0.3
-          - 0.5
 
           learning_rate:
-          - 0.0003
           - 0.001
 
           weight_decay:
-          - 0.0
           - 0.0001
+
+          l2_lambda:
           - 0.001
 
           batch_size:
           - 32
-          - 64
-          - 128
 
   reports_directory: reports/fusion
   

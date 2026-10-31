@@ -43,6 +43,7 @@ pip-delete-this-directory.txt
 /reports/runs/
 /reports/data/
 /reports/fusion/
+/reports/topic/
 
 # Unit test / coverage reports
 htmlcov/

@@ -89,7 +89,8 @@ def validate_fusion_config(config: dict) -> dict:
         
         expected = common | ({"C"} if kind == "logistic" else {"hidden_dims", "dropout", "learning_rate", "weight_decay", "batch_size"})
         params = space["parameters"]
-        if set(params) != expected or any(not isinstance(v, list) or not v for v in params.values()):
+        optional = {"l2_lambda"} if kind == "mlp" else set()
+        if not expected.issubset(params) or set(params) - expected - optional or any(not isinstance(v, list) or not v for v in params.values()):
             raise ValueError(f"Parâmetros incompatíveis em {kind}: {sorted(expected)}")
         
         for key, values in params.items():
@@ -107,7 +108,7 @@ def validate_fusion_config(config: dict) -> dict:
                     valid = not isinstance(value, bool) and isinstance(value, (int, float)) and np.isfinite(value)
 
                     if valid:
-                        valid = 0 <= value < 1 if key == "dropout" else value >= 0 if key == "weight_decay" else value > 0
+                        valid = 0 <= value < 1 if key == "dropout" else value >= 0 if key in {"weight_decay", "l2_lambda"} else value > 0
 
                 if not valid:
                     raise ValueError(f"Valor inválido em {kind}.{key}: {value}")

@@ -236,21 +236,31 @@ class ImageCaptioner(FeatureStage):
                 with Image.open(str(row.path)) as image:
                     inputs = self.processor(images=image.convert("RGB"), common_kwargs={"return_tensors":"pt"})
 
-                result = cast(Any, self.model.generate(**{k: v.to(self.device) for k, v in inputs.items()},
-                    do_sample=False, num_beams=settings["num_beams"], max_new_tokens=settings["max_new_tokens"],
-                    return_dict_in_generate=True, output_scores=True))
-                
-                scores = self.model.text_decoder.compute_transition_scores(
-                    result.sequences, result.scores, getattr(result, "beam_indices", None), normalize_logits=True)
-                
-                # BLIP começa com um único BOS, o restante são tokens gerados.
-                ids = result.sequences[0, 1:1 + scores.shape[1]].cpu().numpy()
+                pixel_values = cast(Any, inputs["pixel_values"])
+                pixels = pixel_values.to(self.device)
+
+                result = cast(Any, self.model.generate(
+                    pixel_values=pixels, do_sample=False,
+                    num_beams=settings["num_beams"],
+                    max_new_tokens=settings["max_new_tokens"],
+                    repetition_penalty=settings.get("repetition_penalty", 1.0),
+                    no_repeat_ngram_size=settings.get("no_repeat_ngram_size", 0),
+                    return_dict_in_generate=True,
+                ))
+
                 description = self.processor.decode(result.sequences[0], skip_special_tokens=True).strip()
 
                 if not description:
                     raise ValueError("BLIP produziu uma descrição vazia")
+
+                sequences = result.sequences
+                outputs = self.model(pixel_values=pixels, input_ids=sequences)
+                log_probs = torch.log_softmax(outputs.logits[:, :-1, :].float(), dim=-1)
+
+                selected = log_probs.gather(-1, sequences[:, 1:].unsqueeze(-1)).squeeze(-1)
                 
-                confidence = sequence_confidence(scores[0].cpu().numpy(), ids, cast(Any, self.processor).tokenizer.all_special_ids)
+                confidence = sequence_confidence(selected[0].cpu().numpy(), sequences[0, 1:].cpu().numpy(), cast(Any, self.processor).tokenizer.all_special_ids)
+
                 cache[row.sha256] = (description, confidence)
                 
         return pd.DataFrame([cache[h] for h in records["sha256"]], columns=["image_description", "image_score"], index=data.index)

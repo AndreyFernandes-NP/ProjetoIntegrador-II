@@ -104,23 +104,33 @@ def transform(df: pd.DataFrame, config: dict) -> pd.DataFrame:
 
     if not isinstance(rules, dict) or not isinstance(drops, list):
         raise ValueError("transformacoes deve ser um mapa e drop_cols deve ser uma lista")
-    
+
     require_columns(df, [*rules, *drops], "Processamento")
     overlap = set(rules) & set(drops)
 
     if overlap:
         raise ValueError(f"Colunas configuradas para converter e remover: {sorted(overlap)}")
-    
+
     result = df.copy()
     for column, rule in rules.items():
         if not isinstance(rule, dict) or "cast" not in rule:
             raise ValueError(f"Regra inválida para {column}: informe cast")
+        
         try:
             result[column] = cast_column(result[column], rule)
 
         except (ValueError, TypeError, OverflowError) as exc:
             raise ValueError(f"Conversão de '{column}' falhou: {exc}") from exc
-        
+
+    require_columns(result, ["description"], "Contagem de palavras")
+    result["num_words"] = (
+        result["description"]
+        .astype("string")
+        .fillna("")
+        .str.count(r"\S+")
+        .astype("Int64")
+    )
+
     return result.drop(columns=drops)
 
 def process_dataset(config_path: Path | None = None, *, dry_run: bool = False, root: Path = PATHS.root) -> pd.DataFrame:
