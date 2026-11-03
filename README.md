@@ -64,9 +64,15 @@ Os geradores não recebem `target_category` como entrada e não são tratados co
 - Comparação de modelos, análise de generalização e prevenção de vazamento de informações.
 - Consolidação da documentação acadêmica e técnica.
 
+## Requisitos
+
+- Python 3.12.2 (ou menor)
+- `requirements.txt`
+- Ambiente Virtual [Recomendado]
+
 ## Execução e instalação
 
-**A documentar.** O sistema ainda não está completamente pronto e serão necessários modificações que podem alterar a ordem de execução dos arquivos do projeto ou simplificá-los.
+Siga os passos abaixo para poder executar os arquivos do projeto em um ambiente seguro.
 
 1. **Clone o repositório**
    ```bash
@@ -84,6 +90,11 @@ Os geradores não recebem `target_category` como entrada e não são tratados co
 4. **Instale as dependências**
    ```bash
    pip install -r requirements.txt
+   ```
+
+   5. **Execute nosso programa**
+   ```bash
+   python -m src
    ```
 
 ## Referência
