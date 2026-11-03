@@ -92,7 +92,7 @@ Siga os passos abaixo para poder executar os arquivos do projeto em um ambiente 
    pip install -r requirements.txt
    ```
 
-   5. **Execute nosso programa**
+5. **Execute nosso programa**
    ```bash
    python -m src
    ```
