@@ -2,8 +2,6 @@
 
 Esse repositório reúne o desenvolvimento do **Projeto Integrador II da Pós-Graduação em Inteligência Artificial da PUC-SP**. O projeto investiga a classificação automática de chamados de suporte de tecnologia da informação, combinando informações textuais, visuais e tabulares em uma abordagem multimodal.
 
-> **Estado do projeto:** desenvolvimento e avaliação. A documentação descreve a arquitetura adotada e as frentes de trabalho em evolução, os resultados e os procedimentos operacionais estão sendo consolidados e serão atualizados ao decorrer dos últimos momentos.
-
 ## Objetivo
 
 Desenvolver e avaliar um sistema de triagem inteligente de chamados de TI, capaz de utilizar o título, a descrição, evidências visuais e os atributos estruturados de cada solicitação para apoiar a classificação de sua categoria. A proposta busca reduzir a dependência de triagem exclusivamente manual e examinar a contribuição de diferentes modalidades de dados para a consistência das decisões.
